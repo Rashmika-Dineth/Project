@@ -2,7 +2,39 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import json
+import time
 
+def CaptureImg(save_path="output/captured_img.png", camera_index=1):
+    # Open camera
+    cap = cv2.VideoCapture(camera_index)
+
+    if not cap.isOpened():
+        print("Error: Could not open camera.")
+        return None
+
+    # Give camera a short time to adjust/expose
+    time.sleep(0.5)
+
+    # Capture one frame
+    ret, frame = cap.read()
+    if not ret:
+        print("Failed to grab frame")
+        cap.release()
+        return None
+
+    # Show the captured frame (optional)
+    cv2.imshow("Captured Image", frame)
+    cv2.waitKey(500)  # display for 0.5 second
+
+    # Save the image automatically
+    cv2.imwrite(save_path, frame)
+    print(f"Image saved as {save_path}")
+
+    # Release resources
+    cap.release()
+    cv2.destroyAllWindows()
+    return frame
+    
 def load_H_Matrix():
     with open("output/H_matrix.json", "r") as f:
         H = np.array(json.load(f))
@@ -11,7 +43,7 @@ def load_H_Matrix():
 def save_image(image):
    cv2.imshow("Image", image)
    cv2.imwrite("output/Markdown_Image.png", image)
-   cv2.waitKey(0)
+   cv2.waitKey(1500)
    cv2.destroyAllWindows()
 
 def pixel_to_robot(u, v, H):
@@ -66,6 +98,9 @@ def object_detection(img,H):
       json.dump(data, f, indent=4)
       
    return img_clr
+
+CaptureImg('output/captured_img.png',1)
+img = cv2.imread("./output/captured_img.png")
 
 img_clr = cv2.imread('./output/captured_img.png')
 img = cv2.cvtColor(img_clr, cv2.COLOR_BGR2GRAY)

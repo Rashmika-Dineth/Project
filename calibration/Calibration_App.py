@@ -3,12 +3,18 @@ import cv2
 import numpy as np
 
 
-# Store H Matrix
+# ===============================
+# Global Variables
+# ===============================
 hmatrix = []
+image_pts = []
 
+# ===============================
+# Capture Image and Save
+# ===============================
 def CaptureImg():
     # Open default camera (0 = built-in webcam)
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
 
     if not cap.isOpened():
         print("Error: Could not open camera.")
@@ -40,60 +46,116 @@ def CaptureImg():
     cap.release()
     cv2.destroyAllWindows()
 
+# ===============================
+# Save Computed H Matrix to JSON
+# ===============================
 def Save_H_Matrix(H):
     with open("output/H_matrix.json", "w") as f:
         json.dump(H.tolist(), f, indent=4)
     print("Homography matrix saved to H_matrix.json")
+    return True
 
+
+# ===============================
+# Mouse Click Event to Collect Image Points
+# ===============================
 def click_event(event, x, y, flags, param):
-    global hmatrix
-    
-    if event == cv2.EVENT_LBUTTONDOWN and len(hmatrix) < 4:
-        hmatrix.append([x, y])
-        print(f"Image Point {len(hmatrix)}: ({x}, {y})")
+    global image_pts
+    img = param
+    if event == cv2.EVENT_LBUTTONDOWN and len(image_pts) < 4:
+        image_pts.append([x, y])
+        print(f"Image Point {len(image_pts)}: ({x}, {y})")
         
-        cv2.circle(img, (x, y), 5, (0, 0, 255), -1)
+        cv2.circle(img, (x, y), 2, (0, 0, 255), -1)
         cv2.imshow("Image", img)
 
-        if len(hmatrix) == 4:
+        if len(image_pts) == 4:
             cv2.destroyAllWindows()
+            return image_pts
 
-def Generate_H_Matrix(img_pts):
+# ===============================
+# Generate Homography Matrix from Image Points and Robot Points
+# ===============================
+def Generate_H_Matrix():
     robot_pts = []
+    image_pts = []
 
-    print("\nEnter 4 Robot Points (X Y):")
-    for i in range(4):
-        x = float(input(f"Robot Point {i+1} - X: "))
-        y = float(input(f"Robot Point {i+1} - Y: "))
+    # Load JSON file
+    with open("./output/robot_coordinates.json", "r") as f:
+        datarbt = json.load(f)
+    with open("./output/image_points.json", "r") as f:
+        dataimg = json.load(f)
+
+    # Read points in order
+    for i in range(1, 5):
+        rbt_point = datarbt[f"point{i}"]
+        x = float(rbt_point["x"])
+        y = float(rbt_point["y"])
         robot_pts.append([x, y])
-
+        img_point = dataimg[f"point{i}"]
+        x = float(img_point["x"])
+        y = float(img_point["y"])
+        image_pts.append([x, y])
     robot_pts = np.array(robot_pts, dtype=np.float32)
-    img_pts = np.array(img_pts, dtype=np.float32)
+    img_pts = np.array(image_pts, dtype=np.float32)
 
-    # Compute homography
+    # Compute homography    
     H, mask = cv2.findHomography(img_pts, robot_pts)
-
     print("\nHomography Matrix H:")
     print(H)
 
-    Save_H_Matrix(H)
+    return Save_H_Matrix(H)
+
+# -----------------------------
+# Get Image Points by Clicking on the Captured Image
+# -----------------------------
+def Get_Image_Points():
+    global image_pts
+    image_pts = []  # reset before collecting
+
+    img = cv2.imread("./output/captured_img.png")
+
+    if img is None:
+        print("Error: Image not found.")
+        return None
+
+    cv2.imshow("Image", img)
+    cv2.setMouseCallback("Image", click_event, img)
+
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    if len(image_pts) == 4:
+        Save_Image_Points(image_pts)   # 🔥 Save to JSON
+        return image_pts
+    else:
+        print("Error: You must select exactly 4 points.")
+        return None
+    
+# -----------------------------
+# Save Image Points to JSON
+# -----------------------------
+def Save_Image_Points(points):
+    data = {}
+
+    for i, (x, y) in enumerate(points, start=1):
+        data[f"point{i}"] = {
+            "x": float(x),
+            "y": float(y)
+        }
+
+    with open("output/image_points.json", "w") as f:
+        json.dump(data, f, indent=4)
+
+    print("Image points saved to output/image_points.json")
 
 # -----------------------------
 # Main Program
 # -----------------------------
+def main():
+    # CaptureImg()
+    # Get_Image_Points()
+    return Generate_H_Matrix()
 
-CaptureImg()
-img = cv2.imread("./output/captured_img.png")
-cv2.imshow("Image", img)
-cv2.setMouseCallback("Image", click_event)
-
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-
-print("\nCollected Image Points:")
-print(hmatrix)
-
-if len(hmatrix) == 4:
-    Generate_H_Matrix(hmatrix)
-else:
-    print("Error: You must select exactly 4 points.")
+if __name__ == "__main__":
+    main()

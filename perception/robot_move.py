@@ -2,7 +2,7 @@
 Main application for Dobot MG400 control with machine vision integration
 """
 
-from dobot_controller import (
+from .dobot_controller import (
     ConnectRobot,
     StartFeedbackThread,
     SetupRobot,

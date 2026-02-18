@@ -6,7 +6,7 @@ Uses Dobot Python API from https://github.com/Dobot-Arm/TCP-IP-4Axis-Python
 """
 
 import threading
-from dobot_api import DobotApiDashboard, DobotApi, DobotApiMove, MyType, alarmAlarmJsonFile
+from .dobot_api import DobotApiDashboard, DobotApi, DobotApiMove, MyType, alarmAlarmJsonFile
 from time import sleep
 import numpy as np
 

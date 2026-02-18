@@ -64,17 +64,10 @@ def filter_image(img):
    kernel = np.ones((3, 3), np.uint8)
    return cv2.erode(closing, kernel, iterations=6)
 
-def object_detection(img,H):
+def object_detection(img,H,img_clr):
    eroded = filter_image(img)
    data = {}  # Dictionary to store JSON data 
    num_labels, labeled_img, stats, centroids = cv2.connectedComponentsWithStats(eroded, connectivity=4, ltype=cv2.CV_32S)
-   # returns N labels, with statistics and centroids in an array [0, N-1] where 0 represents the background label
-   # print(f'Found {num_labels-1} objects')
-
-   # # Draw Rectangles around detected objects
-   # for (p1x, p1y, size_x, size_y, _) in stats[1:]:
-   #    print(f'Object inside the rectangle with coordinates ({p1x},{p1y}), ({p1x+size_x}, {p1y+size_y})')
-   #    cv2.rectangle(img_clr, (p1x,p1y), (p1x+size_x, p1y+size_y), (0,0,255), 2)
 
    # Draw Centroids
    for i, (cx, cy) in enumerate(centroids[1:], start=1):
@@ -99,14 +92,20 @@ def object_detection(img,H):
       
    return img_clr
 
-CaptureImg('output/captured_img.png',1)
-img = cv2.imread("./output/captured_img.png")
 
-img_clr = cv2.imread('./output/captured_img.png')
-img = cv2.cvtColor(img_clr, cv2.COLOR_BGR2GRAY)
+def main():
+    print("Running Object detection module...")
+    #CaptureImg('output/captured_img.png',1)
 
-H = load_H_Matrix()
+    # img = cv2.imread("./output/captured_img.png")
+    img_clr = cv2.imread('./output/captured_img.png')
+    img = cv2.cvtColor(img_clr, cv2.COLOR_BGR2GRAY)
 
-img_clr = object_detection(img,H)
+    H = load_H_Matrix()
 
-save_image(img_clr)
+    img_clr = object_detection(img,H,img_clr)
+
+    save_image(img_clr)
+
+if __name__ == "__main__":
+    main()

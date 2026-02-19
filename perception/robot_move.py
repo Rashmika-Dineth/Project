@@ -7,146 +7,174 @@ from .dobot_controller import (
     StartFeedbackThread,
     SetupRobot,
     MoveJ,
-    MoveL,
     WaitArrive,
     ControlDigitalOutput,
     GetCurrentPosition,
     DisconnectRobot
 )
+
 from time import sleep
-import numpy as np
 import json
-import time
 
-target_point = [350, 0, 0, 0]
-drop_point = [227,-243,-80,-83]
-drop_point_up = [227,-243,-20,-83]
 
-# Load coordinates from JSON
-def load_H_Matrix():
-    with open("output/centroids_data.json", "r") as f:
-        data = json.load(f)
-    # Extract X and Y into a 2D array
-    arr = np.array([[point['X'], point['Y']] for point in data.values()])
-    return arr
+# ==============================
+# CONFIGURATION
+# ==============================
 
-Cords = load_H_Matrix()
-targets = []
+HOME_POINT = [350, 0, 0, 0]
 
-for i in range(Cords.shape[0]):
-    x, y = Cords[i]
-    high_point = [x, y, -100, 0]
-    low_point = [x, y, -167, 0]
-    targets.append((high_point, low_point))
+DROP_POINT = [227, -243, -80, -83]
+DROP_POINT_UP = [227, -243, -20, -83]
+
+SAFE_Z_OFFSET = 60        # distance above object
+PICK_Z = -167             # object surface height
+
+
+# ==============================
+# LOAD OBJECTS FROM VISION JSON
+# ==============================
+
+def load_objects():
+    with open("output/world_points.json", "r") as f:
+        return json.load(f)
+
+
+def get_targets(selected_color=None, selected_shape=None):
+    """
+    Returns list of (high_point, low_point) tuples
+    filtered by color and/or shape
+    """
+    data = load_objects()
+    targets = []
+
+    for key, point in data.items():
+
+        color_match = (selected_color is None) or (point["color"] == selected_color)
+        shape_match = (selected_shape is None) or (point["shape"] == selected_shape)
+
+        if color_match and shape_match:
+
+            x = point["X"]
+            y = point["Y"]
+
+            high_point = [x, y, PICK_Z + SAFE_Z_OFFSET, 0]
+            low_point = [x, y, PICK_Z, 0]
+
+            targets.append((high_point, low_point))
+
+    return targets
+
+
+# ==============================
+# VISION SYSTEM PLACEHOLDER
+# ==============================
 
 def get_vision_target_point():
     """
-    Get target point from your machine vision system
-    Replace this function with your actual vision code
-    
-    Returns:
-        list: [x, y, z, r] coordinates in mm and degrees
+    Replace this with real vision system code
     """
-    # TODO: Replace with your actual vision system code
+    target = [350, 0, 0, 0]
+    print(f"Vision system detected target: {target}")
+    return target
+
+
+# ==============================
+# ROBOT MOVE FUNCTION
+# ==============================
+
+def moveToPosition(move, target_point, dashboard, vacuum_state):
+
+    MoveJ(move, target_point)
+
+    arrived = WaitArrive(target_point, tolerance=2.0, timeout=5.0)
+
+    if not arrived:
+        print("*** Failed to reach position ***")
+        return False
+
+    ControlDigitalOutput(dashboard, output_index=1, status=vacuum_state)
+    sleep(0.3)
+
+    current_pos = GetCurrentPosition()
+    print(f"Arrived at: {current_pos}")
     
-    # example for testing
-    target_point = [350, 0, 0, 0]
+    return True
 
-    print(f"Vision system detected target: {target_point}")
-    return target_point
 
-def moveToPosition(move,target_point,dashboard,vaccum):
-    # Move to Point 1
-        print("\n--- Moving to Point 1 ---")
-        MoveL(move, target_point)
-        
-        # Wait for robot to reach the point
-        arrived = WaitArrive(target_point, tolerance=1.0, timeout=30.0)
-        if arrived:
-            # Turn on Digital Output 1
-            print("\n--- Activating Digital Output 1 ---")
-            ControlDigitalOutput(dashboard, output_index=1, status=vaccum)
-            
-            # Wait for the command to execute
-            sleep(0.5)
-            
-            print("\n=== move to PICK point OK ===")
-            current_pos = GetCurrentPosition()
-            print(f"Robot is at position: {current_pos}")
+# ==============================
+# MAIN PROGRAM
+# ==============================
 
-        else:
-            print("\n*** FAIL to reach target position ***")
+ROBOT_IP = "192.168.1.6"
 
-def main():
-    """
-    Main control flow
-    """
-    # Robot IP address
-    ROBOT_IP = "192.168.1.6"
+# Declare globals outside the function
+dashboard = None
+move = None
+feed = None
+feed_thread = None
+
+def connection():
+    global dashboard, move, feed, feed_thread
+    print("Running Robot Move Program .....")
     
+    dashboard, move, feed = ConnectRobot(ip=ROBOT_IP, timeout_s=5.0)
+    feed_thread = StartFeedbackThread(feed)
+    SetupRobot(dashboard, speed_ratio=50, acc_ratio=50)
+    print("Robot connected successfully!")
+
+def DisconnectConnection():
+    DisconnectRobot(dashboard, move, feed, feed_thread)
+
+def main(color=None,shape=None):
+
     try:
-        # Connect to robot
-        print("=" * 50)
-        print("DOBOT MG400 CONTROL WITH VISION SYSTEM")
-        print("=" * 50)
-        dashboard, move, feed = ConnectRobot(ip=ROBOT_IP, timeout_s=5.0)
-        
-        # Start feedback monitoring thread
-        feed_thread = StartFeedbackThread(feed)
-        
-        # Setup and enable robot
-        SetupRobot(dashboard, speed_ratio=50, acc_ratio=50)
-        
-        # Get target point from vision system
-        print("\n--- Getting target from vision system ---")
-        target_point_1 = get_vision_target_point()
+        # Get selection from app buttons (CHANGE HERE)
+        selected_color = color      # Example
+        selected_shape = shape       # Example
 
-        moveToPosition(move, target_point, dashboard, 0)
-        # Move to Point 1
-        for high, low in targets:
-        # Move to high point
+        targets = get_targets(selected_color, selected_shape)
+
+        print(f"\nFound {len(targets)} objects to pick")
+
+        if len(targets) == 0:
+            print("No matching objects found.")
+            DisconnectConnection()
+            return
+
+        # Move to Home first
+        moveToPosition(move, HOME_POINT, dashboard, 0)
+
+        # =========================
+        # PICK AND PLACE LOOP
+        # =========================
+        for i, (high, low) in enumerate(targets):
+
+            print(f"\nPicking object {i+1}")
+
+            # Approach
             moveToPosition(move, high, dashboard, 0)
-        
-        # Move down to low point
+            # Pick (vacuum ON)
             moveToPosition(move, low, dashboard, 1)
-        
-        # Move back to high point
+            # Lift
             moveToPosition(move, high, dashboard, 1)
-        
-        # Move to drop point
-            moveToPosition(move, drop_point_up, dashboard, 1)
-            moveToPosition(move, drop_point, dashboard, 0)
+            # Move to drop
+            moveToPosition(move, DROP_POINT_UP, dashboard, 1)
+            moveToPosition(move, DROP_POINT, dashboard, 0)
 
-        # Move to Point 2 (Place position)
-        #print("\n--- Moving to PLACE Point ---")
-        #target_point_2 = [324.68, 31.12, -166, 30]  # example for place coordinates
-        #MoveJ(move, target_point_2)
+            # Leave drop area safely
+            moveToPosition(move, DROP_POINT_UP, dashboard, 0)
 
-        # Move to Point 1
-        #print("\n--- Moving to Point 1 ---")
-        #MoveL(move, target_point_1)
-        
-        # Wait for robot to reach the point
-        #arrived = WaitArrive(target_point_2, tolerance=1.0)
-        #if arrived:
-        #    print("\n=== move to PLACE point OK ===")
-        #else:
-        #    print("\n*** FAIL PLACE point ***")
+        # Return Home after finishing
+        moveToPosition(move, HOME_POINT, dashboard, 0)   
 
-        # Turn off Digital Output 1    
-        #ControlDigitalOutput(dashboard, output_index=1, status=0)            
-            
-        # Disconnect
-        DisconnectRobot(dashboard, move, feed, feed_thread)        
-        
     except KeyboardInterrupt:
-        print("\n\nProgram interrupted by user")
+        print("\nProgram interrupted by user")
+        DisconnectConnection()
+
     except Exception as e:
-        print(f"\n*** ERROR occurred: {e} ***")
-        DisconnectRobot(dashboard, move, feed, feed_thread)        
-        import traceback
-        traceback.print_exc()
+        print(f"\nERROR: {e}")
+        DisconnectConnection()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

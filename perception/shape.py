@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import json
+import os
+import sys
 
 # ===============================
 # Global Variables
@@ -21,13 +23,43 @@ COLOR_RANGES = {
 }
 
 # ===============================
+# Load Homography Matrix
+# ===============================
+
+def load_H_Matrix(path="output/H_matrix.json"):
+    if not os.path.exists(path):
+        print("H_matrix.json not found!")
+        sys.exit(1)
+
+    with open(path, "r") as f:
+        H = np.array(json.load(f), dtype=np.float64)
+
+    return H
+
+H_MATRIX = load_H_Matrix()
+
+# ===============================
+# Pixel to World Conversion
+# ===============================
+
+def Pixel_To_World(cx, cy):
+
+    pixel = np.array([cx, cy, 1.0], dtype=np.float64)
+    world = H_MATRIX @ pixel
+
+    if world[2] == 0:
+        return None, None
+
+    X = world[0] / world[2]
+    Y = world[1] / world[2]
+
+    return float(X), float(Y)
+
+# ===============================
 # Create Color Mask
 # ===============================
 
 def Create_Color_Mask(hsv, color):
-
-    if color not in COLOR_RANGES:
-        return np.ones(hsv.shape[:2], dtype=np.uint8) * 255
 
     ranges = COLOR_RANGES[color]
 
@@ -59,17 +91,16 @@ def Classify_Shape(contour):
     area = cv2.contourArea(contour)
     circularity = 4 * np.pi * area / (perimeter ** 2) if perimeter > 0 else 0
 
-    x, y, w, h = cv2.boundingRect(contour)
-    aspect_ratio = w / h if h > 0 else 0
-
-    if circularity > 0.85:
+    if 0.80 < circularity <= 1.2:
         return "circle"
 
     if vertices == 3:
         return "triangle"
 
     if vertices == 4:
-        return "square" if 0.8 <= aspect_ratio <= 1.2 else "rectangle"
+        x, y, w, h = cv2.boundingRect(approx)
+        aspect_ratio = w / float(h)
+        return "square" if 0.9 <= aspect_ratio <= 1.1 else "rectangle"
 
     return "polygon"
 
@@ -77,7 +108,7 @@ def Classify_Shape(contour):
 # Detect Objects
 # ===============================
 
-def Detect_Objects(image, color_filter=None, shape_filter=None):
+def Detect_Objects(image):
 
     objects = []
     detected_centers = []
@@ -85,15 +116,11 @@ def Detect_Objects(image, color_filter=None, shape_filter=None):
     blurred = cv2.GaussianBlur(image, (7, 7), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
-    # Reduce reflections
     h, s, v = cv2.split(hsv)
     v = cv2.threshold(v, 240, 240, cv2.THRESH_TRUNC)[1]
     hsv = cv2.merge([h, s, v])
 
-    colors = [color_filter] if color_filter and color_filter != "any" else \
-        list(COLOR_RANGES.keys())
-
-    for color_name in colors:
+    for color_name in COLOR_RANGES.keys():
 
         mask = Create_Color_Mask(hsv, color_name)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -114,19 +141,12 @@ def Detect_Objects(image, color_filter=None, shape_filter=None):
             if any(np.hypot(cx - x, cy - y) < 30 for x, y in detected_centers):
                 continue
 
-            x, y, w, h = cv2.boundingRect(contour)
-            if h == 0 or not (0.2 < w / h < 5.0):
-                continue
-
             hull = cv2.convexHull(contour)
             hull_area = cv2.contourArea(hull)
             if hull_area == 0 or area / hull_area < 0.85:
                 continue
 
             shape = Classify_Shape(contour)
-
-            if shape_filter and shape_filter != "any" and shape != shape_filter:
-                continue
 
             objects.append({
                 "center": (cx, cy),
@@ -141,21 +161,37 @@ def Detect_Objects(image, color_filter=None, shape_filter=None):
     return objects
 
 # ===============================
-# Get Display Color
+# Save World Coordinates JSON
 # ===============================
 
-def Get_Display_Color(name):
+def Save_World_Coordinates(objects, filename="output/world_points.json"):
 
-    return {
-        'red': (0, 0, 255),
-        'blue': (255, 0, 0),
-        'green': (0, 255, 0),
-        'yellow': (0, 255, 255),
-        'orange': (0, 165, 255),
-        'purple': (255, 0, 255),
-        'cyan': (255, 255, 0),
-        'black': (0, 0, 0),
-    }.get(name, (128, 128, 128))
+    # Sort left → right (robot friendly)
+    objects = sorted(objects, key=lambda obj: obj["center"][0])
+
+    data = {}
+
+    for i, obj in enumerate(objects):
+
+        cx, cy = obj["center"]
+        X, Y = Pixel_To_World(cx, cy)
+
+        if X is None:
+            continue
+
+        key = f"P{i+1}"
+
+        data[key] = {
+            "X": X,
+            "Y": Y,
+            "cx": int(cx),
+            "cy": int(cy),
+            "color": obj["color"],
+            "shape": obj["shape"]
+        }
+
+    with open(filename, "w") as f:
+        json.dump(data, f, indent=4)
 
 # ===============================
 # Annotate Image
@@ -168,17 +204,13 @@ def Annotate_Image(image, objects):
     for obj in objects:
 
         cx, cy = obj["center"]
-        color_bgr = Get_Display_Color(obj["color"])
 
-        cv2.drawContours(annotated, [obj["contour"]], -1, color_bgr, 2)
-
+        cv2.drawContours(annotated, [obj["contour"]], -1, (0, 255, 0), 2)
         cv2.circle(annotated, (cx, cy), 5, (0, 255, 0), -1)
-        cv2.line(annotated, (cx - 10, cy), (cx + 10, cy), (0, 255, 0), 2)
-        cv2.line(annotated, (cx, cy - 10), (cx, cy + 10), (0, 255, 0), 2)
 
         label = f"{obj['shape']} ({obj['color']})"
         cv2.putText(annotated, label, (cx, cy - 15),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_bgr, 2)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
     return annotated
 
@@ -188,6 +220,8 @@ def Annotate_Image(image, objects):
 
 def main():
 
+    os.makedirs("output", exist_ok=True)
+
     image = cv2.imread("./output/captured_img.png")
 
     if image is None:
@@ -195,14 +229,15 @@ def main():
         return
 
     objects = Detect_Objects(image)
-    annotated = Annotate_Image(image, objects)
 
+    annotated = Annotate_Image(image, objects)
     cv2.imwrite("output/Color_Shape.png", annotated)
 
-    cv2.imshow("Detected Objects", annotated)
-    cv2.waitKey(1)
-    cv2.destroyAllWindows()
+    Save_World_Coordinates(objects)
 
+    cv2.imshow("Detected Objects", annotated)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()

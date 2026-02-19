@@ -13,6 +13,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import perception.object as obj
 import calibration.Calibration_App as calib
 import perception.robot_move as move
+import perception.colshap as col
 
 # Initialize session state
 if "show_camera" not in st.session_state:
@@ -20,6 +21,7 @@ if "show_camera" not in st.session_state:
 
 if "camera_expanded" not in st.session_state:
     st.session_state.camera_expanded = False
+
 
 st.set_page_config(page_title="Robot Dashboard", layout="wide")
 st.title("🤖 Robot Object Picking Dashboard")
@@ -89,10 +91,14 @@ with col4:
         obj.main()
 
 with col5:
-    if st.button("▶ Start Picking"):
-        st.success("Picking Started!")
-        move.main()
+    if st.button("▶ Connect to DOBOT"):
+        move.connection()  
+        st.success("Connected!")
 
+with col5:
+    if st.button("▶ Disconnect to DOBOT"):
+        move.DisconnectConnection()  
+        st.success("Disconnected!")
 
 # ===============================
 # Capture Image Section
@@ -169,10 +175,10 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.title("Captured Image")
-    st.image(image_1, caption="Captured Image", use_container_width=False)
+    st.image(image_1, caption="Captured Image", width='content')
 with col2:
     st.title("Detected Objects")
-    st.image(image_2, caption="Marked Image", use_container_width=False)
+    st.image(image_2, caption="Marked Image", width='content') 
 
 
 # ===============================
@@ -182,28 +188,27 @@ st.subheader("🎯 Object Detection")
 
 col1, col2, col3 = st.columns(3)
 
+
+col1, col2, col3, col4, col5 = st.columns(5)
+
+
 with col1:
-    circle = st.checkbox("⭕ Circle Detection")
-
+    if st.button("⭕ Circle Detection"): 
+        move.main(None,'circle')
 with col2:
-    rectangle = st.checkbox("▭ Rectangle Detection")
-
+    if st.button("▭ Rectangle Detection"):
+        move.main(None,'square')
 with col3:
-    select_all = st.checkbox("✅ Select All")
+    if st.button("✅ Select All"):
+        move.main()
+with col4:
+    if st.button("Select Red"):
+        move.main('red')
+with col5:
+    if st.button("Select Blue"):
+        move.main('blue')
 
-# Logic for Select All
-if select_all:
-    circle = True
-    rectangle = True
 
-# Display selected options
-selected_objects = []
-
-if circle:
-    selected_objects.append("Circle")
-
-if rectangle:
-    selected_objects.append("Rectangle")
 
 # ===============================
 # Color AND Shape Detection Logic
@@ -218,6 +223,7 @@ button_label = "🙈 Hide Color & Shape" if st.session_state.show_color_shape el
 
 # Toggle button
 if st.button(button_label):
+    col.main()
     st.session_state.show_color_shape = not st.session_state.show_color_shape
     st.rerun()  # Refresh to update display
 
@@ -230,13 +236,7 @@ if st.session_state.show_color_shape:
 
     if os.path.exists(image_path):
         image = Image.open(image_path)
-        st.image(image, caption="Detected Objects", use_container_width=True)
+        st.image(image, caption="Detected Objects", width='stretch')
     else:
         st.warning("No processed image found. Please run detection first.")
 
-# ===============================
-# STATUS SECTION
-# ===============================
-st.subheader("📊 System Status")
-st.write("✔ System Ready")
-st.write("Selected:", selected_objects)

@@ -133,6 +133,22 @@ def Get_Image_Points():
         return None
     
 # -----------------------------
+# OPEN Image and Display 
+# -----------------------------
+def Open_Image(path):
+
+    img = cv2.imread(path)
+
+    if img is None:
+        print("Error: Image not found.")
+        return None
+
+    cv2.imshow("Image", img)
+
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+   
+# -----------------------------
 # Save Image Points to JSON
 # -----------------------------
 def Save_Image_Points(points):

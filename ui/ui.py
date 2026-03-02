@@ -72,8 +72,9 @@ col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
     if st.button("📷 Capture Image"):
-        st.session_state.show_camera = True
-        st.session_state.camera_expanded = True 
+        calib.CaptureImg()
+        # st.session_state.show_camera = True
+        # st.session_state.camera_expanded = True 
 
 with col2:
     if st.button("⛔ Mark Image Cordinates"):
@@ -103,22 +104,22 @@ with col5:
 # ===============================
 # Capture Image Section
 # ===============================
-if st.session_state.show_camera:
-    with st.expander("Camera Section", expanded=st.session_state.camera_expanded):
-        camera_image = st.camera_input("Take a picture")
+# if st.session_state.show_camera:
+#     with st.expander("Camera Section", expanded=st.session_state.camera_expanded):
+#         camera_image = st.camera_input("Take a picture")
 
-        if camera_image is not None:
-            os.makedirs("output", exist_ok=True)
+#         if camera_image is not None:
+#             os.makedirs("output", exist_ok=True)
 
-            # Convert to PIL Image and save
-            image = Image.open(camera_image)
-            image.save("output/captured_img.png")
-            st.success(f"Image saved.")
+#             # Convert to PIL Image and save
+#             image = Image.open(camera_image)
+#             image.save("output/captured_img.png")
+#             st.success(f"Image saved.")
 
-            # Collapse the expander automatically
-            st.session_state.camera_expanded = False
-            st.session_state.show_camera = False
-            st.rerun()
+#             # Collapse the expander automatically
+#             st.session_state.camera_expanded = False
+#             st.session_state.show_camera = False
+#             st.rerun()
 
 # ===============================
 # Capture Image Section using OpenCV (Alternative)

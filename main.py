@@ -31,13 +31,13 @@ def main():
         '1': calib.main,
         '2': lambda: (obj.main(), calib.Open_Image("./output/Markdown_Image.png")),
         '3': lambda: (col.main(), calib.Open_Image("./output/Color_Shape.png")),
-        # '4': move.main(),
+        '4': move.main(),
         '5': run_streamlit,
         '6': lambda: sys.exit("Exiting program. Goodbye!")
 
     }
 
-    func = switch.get(choice, lambda: print("Invalid option. Please select 1-4."))
+    func = switch.get(choice, lambda: print("Invalid option. Please select 1-6."))
 
     try:
         func()

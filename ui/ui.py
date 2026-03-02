@@ -13,7 +13,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import perception.object as obj
 import calibration.Calibration_App as calib
 import perception.robot_move as move
-import perception.colshap as col
+import perception.shape as shape
 
 # Initialize session state
 if "show_camera" not in st.session_state:
@@ -224,7 +224,7 @@ button_label = "🙈 Hide Color & Shape" if st.session_state.show_color_shape el
 
 # Toggle button
 if st.button(button_label):
-    col.main()
+    shape.main()
     st.session_state.show_color_shape = not st.session_state.show_color_shape
     st.rerun()  # Refresh to update display
 
@@ -233,7 +233,7 @@ if st.session_state.show_color_shape:
 
     st.subheader("🎨 Detected Color & Shape")
 
-    image_path = "output/Color_Shape.png"
+    image_path = "output/Shape_img.png"
 
     if os.path.exists(image_path):
         image = Image.open(image_path)
